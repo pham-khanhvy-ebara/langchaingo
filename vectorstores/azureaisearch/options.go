@@ -53,6 +53,13 @@ func WithEmbedder(e embeddings.Embedder) Option {
 	}
 }
 
+// WithVectorField sets the vector field name for similarity search.
+func WithVectorField(field string) Option {
+	return func(p *Store) {
+		p.vectorField = field
+	}
+}
+
 // WithEmbedder is an option for setting the http client, the vectorstore uses the REST API,
 // default http client is set but can be overridden by this option.
 func WithHTTPClient(client *http.Client) Option {
@@ -65,6 +72,12 @@ func WithHTTPClient(client *http.Client) Option {
 func WithAPIKey(azureAISearchAPIKey string) Option {
 	return func(s *Store) {
 		s.azureAISearchAPIKey = azureAISearchAPIKey
+	}
+}
+
+func WithEndpoint(azureAISearchEndpoint string) Option {
+	return func(s *Store) {
+		s.azureAISearchEndpoint = azureAISearchEndpoint
 	}
 }
 

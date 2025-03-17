@@ -2,9 +2,9 @@ package azureaisearch
 
 import (
 	"context"
-	"encoding/json"
+	// "encoding/json"
 	"errors"
-	"fmt"
+	// "fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -19,6 +19,7 @@ type Store struct {
 	azureAISearchAPIKey   string
 	embedder              embeddings.Embedder
 	client                *http.Client
+	vectorField           string
 }
 
 var (
@@ -45,7 +46,8 @@ var (
 // and returns the `Store` object needed by the other accessors.
 func New(opts ...Option) (Store, error) {
 	s := Store{
-		client: http.DefaultClient,
+		client:      http.DefaultClient,
+		vectorField: "contentVector", // default vector field
 	}
 
 	if err := applyClientOptions(&s, opts...); err != nil {
@@ -108,9 +110,10 @@ func (s *Store) SimilaritySearch(
 	}
 
 	payload := SearchDocumentsRequestInput{
-		Vectors: []SearchDocumentsRequestInputVector{{
-			Fields: "contentVector",
-			Value:  queryVector,
+		VectorQueries: []SearchDocumentsRequestInputVector{{
+			Kind:   "vector",
+			Fields: s.vectorField,
+			Vector: queryVector,
 			K:      numDocuments,
 		}},
 	}
@@ -124,21 +127,16 @@ func (s *Store) SimilaritySearch(
 		return nil, err
 	}
 
-	output := []schema.Document{}
-	for _, searchResult := range searchResults.Value {
-		doc, err := assertResultValues(searchResult)
+	documents := make([]schema.Document, 0, len(searchResults.Value))
+	for _, result := range searchResults.Value {
+		doc, err := assertResultValues(result)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
-
-		if opts.ScoreThreshold > 0 && opts.ScoreThreshold > doc.Score {
-			continue
-		}
-
-		output = append(output, *doc)
+		documents = append(documents, *doc)
 	}
 
-	return output, nil
+	return documents, nil
 }
 
 func assertResultValues(searchResult map[string]interface{}) (*schema.Document, error) {
@@ -150,17 +148,20 @@ func assertResultValues(searchResult map[string]interface{}) (*schema.Document, 
 	}
 
 	metadata := map[string]interface{}{}
-	if resultMetadata, ok := searchResult["metadata"].(string); ok {
-		if err := json.Unmarshal([]byte(resultMetadata), &metadata); err != nil {
-			return nil, fmt.Errorf("couldn't unmarshall metadata %w", err)
+	for key, value := range searchResult {
+		if key == "@search.score" || key == "chunk" || key == "text_vector" {
+			continue
 		}
-	} else {
-		return nil, ErrAssertingMetadata
+		if strValue, ok := value.(string); ok {
+			metadata[key] = strValue
+		} else {
+			return nil, ErrAssertingMetadata
+		}
 	}
 
 	var pageContent string
 	var ok bool
-	if pageContent, ok = searchResult["content"].(string); !ok {
+	if pageContent, ok = searchResult["chunk"].(string); !ok {
 		return nil, ErrAssertingContent
 	}
 
