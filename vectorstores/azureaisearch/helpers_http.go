@@ -25,6 +25,7 @@ func (s *Store) httpDefaultSend(req *http.Request, serviceName string, output an
 func httpReadBody(response *http.Response, serviceName string, output any) error {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
+
 	if err != nil {
 		return fmt.Errorf("err can't read response for %s: %w", serviceName, err)
 	}
